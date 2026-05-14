@@ -1,0 +1,2470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LaTeX 公式编辑器</title>
+<link rel="stylesheet" href="lib/katex/dist/katex.min.css">
+<!-- Preload KaTeX fonts to reduce slow-network fallback -->
+<link rel="preload" href="lib/katex/dist/fonts/KaTeX_Main-Regular.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="lib/katex/dist/fonts/KaTeX_Main-Bold.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="lib/katex/dist/fonts/KaTeX_Math-Italic.woff2" as="font" type="font/woff2" crossorigin>
+<script src="lib/katex/dist/katex.min.js"></script>
+<script src="lib/katex/dist/contrib/mhchem.min.js"></script>
+<script src="lib/html2canvas/html2canvas.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --primary: #4361ee;
+  --primary-hover: #3a56d4;
+  --primary-light: #eef1ff;
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --border: #e2e8f0;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 4px 12px rgba(0,0,0,0.1);
+  --radius: 8px;
+  --sidebar-width: 340px;
+}
+
+/* Accessibility helper (visually hidden but available to screen readers) */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+
+/* Hide copy-tooltips/toasts injected by browser extensions (visual only)
+  We also add runtime removal for these nodes below. */
+.copytex-tooltip, .copytex-toast { display: none !important; visibility: hidden !important; pointer-events: none !important; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header */
+.header {
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  padding: 0 20px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  box-shadow: var(--shadow);
+  z-index: 100;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo svg { width: 24px; height: 24px; }
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+
+.btn-primary {
+  background: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.btn-primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+
+.btn-icon {
+  padding: 6px 8px;
+}
+
+.btn svg { width: 16px; height: 16px; }
+
+/* Main layout */
+.main {
+  display: flex;
+  width: 100%;
+  height: calc(100vh - 52px);
+  overflow: hidden;
+}
+
+/* Sidebar */
+.sidebar {
+  width: var(--sidebar-width);
+  min-width: var(--sidebar-width);
+  max-width: var(--sidebar-width);
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  background: #fafbfc;
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 10px 8px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}
+
+.sidebar-tab:hover { color: var(--text); }
+.sidebar-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--card); }
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px;
+}
+
+.sidebar-content::-webkit-scrollbar { width: 4px; }
+.sidebar-content::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 2px; }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+/* Symbol categories */
+.symbol-category {
+  margin-bottom: 16px;
+}
+
+.category-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.symbol-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+}
+
+.symbol-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 14px;
+}
+
+.symbol-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+  transform: scale(1.05);
+}
+
+.symbol-btn .katex { font-size: 14px; }
+
+/* Template list */
+.template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.template-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.template-item:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.template-preview {
+  flex-shrink: 0;
+  width: 80px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8fafc;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.template-preview .katex { font-size: 14px; }
+
+.template-info { flex: 1; min-width: 0; }
+
+.template-name {
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.template-desc {
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* History panel */
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.history-item {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.history-item:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.history-formula {
+  margin-bottom: 4px;
+}
+
+.history-time {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.history-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+/* Editor area */
+.editor-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Toolbar */
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  overflow: visible;
+  position: relative;
+  z-index: 150;
+}
+
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 4px;
+  flex-wrap: wrap;
+}
+
+.toolbar-group + .toolbar-group {
+  border-left: 1px solid var(--border);
+}
+
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 4px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.toolbar-btn:hover {
+  background: var(--primary-light);
+  color: var(--primary);
+}
+
+.toolbar-btn .katex { font-size: 13px; }
+
+/* Toolbar dropdown */
+.toolbar-btn-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.toolbar-btn.has-dropdown {
+  position: relative;
+  padding-right: 10px;
+}
+
+.toolbar-btn.has-dropdown::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 0;
+  height: 0;
+  border-left: 3px solid transparent;
+  border-right: 3px solid transparent;
+  border-top: 3px solid var(--text-secondary);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.toolbar-dropdown {
+  display: none;
+  position: fixed;
+  z-index: 2000;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.toolbar-dropdown.show { display: block; }
+
+.toolbar-dropdown-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0 4px 6px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+
+.toolbar-dropdown-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.toolbar-dropdown-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.toolbar-dropdown-grid.cols-5 { grid-template-columns: repeat(5, 1fr); }
+
+.toolbar-dropdown-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 36px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.toolbar-dropdown-item:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.toolbar-dropdown-item .katex { font-size: 14px; }
+
+.toolbar-dropdown-item .item-label {
+  font-size: 9px;
+  color: var(--text-secondary);
+  line-height: 1;
+}
+
+.toolbar-dropdown-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
+body.dark .toolbar-dropdown {
+  background: var(--card);
+  border-color: var(--border);
+}
+body.dark .toolbar-dropdown-item:hover {
+  background: #1e3a5f;
+}
+
+/* Editor panels */
+.editor-panels {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.input-panel {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  min-width: 0;
+}
+
+.input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.input-wrapper {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+#latexInput {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 16px;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', 'Consolas', monospace;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--card);
+  tab-size: 2;
+  overflow: auto;
+}
+
+#latexInput::placeholder {
+  color: #cbd5e1;
+}
+
+.preview-panel {
+  flex: 1 1 50%;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+
+.preview-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  overflow: auto;
+  position: relative;
+  background: var(--card);
+  background-image:
+    radial-gradient(circle, #e2e8f0 1px, transparent 1px);
+  background-size: 20px 20px;
+  min-height: 0;
+}
+
+#preview {
+  font-size: 24px;
+  color: var(--text);
+  text-align: center;
+  word-break: break-all;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.preview-placeholder {
+  color: #cbd5e1;
+  font-size: 16px;
+  font-style: italic;
+}
+
+.preview-error {
+  color: var(--danger);
+  font-size: 13px;
+  font-family: monospace;
+  text-align: left;
+  max-width: 100%;
+  word-break: break-word;
+}
+
+/* Status bar */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 16px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  height: 24px;
+}
+
+.status-left, .status-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-overlay.show { display: flex; }
+
+.modal {
+  background: var(--card);
+  border-radius: 12px;
+  box-shadow: var(--shadow-lg);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-title { font-size: 16px; font-weight: 600; }
+
+.modal-close {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.modal-close:hover { background: #f1f5f9; }
+
+.modal-body { padding: 20px; }
+
+.export-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.export-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 16px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.export-btn:hover {
+  border-color: var(--primary);
+  background: var(--primary-light);
+}
+
+.export-btn svg { width: 28px; height: 28px; color: var(--primary); }
+.export-btn span { font-size: 13px; font-weight: 500; }
+
+/* Toast */
+.toast-container {
+  position: fixed;
+  top: 60px;
+  right: 20px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  padding: 10px 16px;
+  background: var(--text);
+  color: white;
+  border-radius: 6px;
+  font-size: 13px;
+  box-shadow: var(--shadow-lg);
+  animation: slideIn 0.2s ease, fadeOut 0.3s ease 2s forwards;
+}
+
+.toast.success { background: var(--success); }
+.toast.error { background: var(--danger); }
+
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+  to { opacity: 0; transform: translateY(-10px); }
+}
+
+/* Resize handle */
+.resize-handle {
+  width: 5px;
+  cursor: col-resize;
+  background: transparent;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.resize-handle:hover::after,
+.resize-handle.active::after {
+  background: var(--primary);
+}
+
+/* Font size controls */
+.font-size-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.font-size-controls input {
+  width: 44px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  text-align: center;
+  font-size: 12px;
+  outline: none;
+  padding: 0;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.font-size-controls input::-webkit-outer-spin-button,
+.font-size-controls input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  appearance: none;
+  margin: 0;
+}
+
+.font-size-controls input:focus {
+  border-color: var(--primary);
+}
+
+/* Theme toggle */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.theme-btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+  color: var(--text-secondary);
+  transition: all 0.15s;
+}
+
+.theme-btn.active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+/* Dark theme */
+body.dark {
+  --bg: #0f172a;
+  --card: #1e293b;
+  --border: #334155;
+  --text: #e2e8f0;
+  --text-secondary: #94a3b8;
+  --primary-light: #1e3a5f;
+}
+
+body.dark .input-header,
+body.dark .preview-header,
+body.dark .sidebar-tabs,
+body.dark .toolbar {
+  background: #162032;
+}
+
+body.dark #latexInput { background: var(--card); color: var(--text); }
+body.dark .preview-wrapper { background-color: var(--card); background-image: radial-gradient(circle, #334155 1px, transparent 1px); }
+body.dark .symbol-btn:hover { background: #1e3a5f; }
+body.dark .theme-toggle { background: #0f172a; }
+body.dark .theme-btn.active { background: #334155; }
+body.dark .font-size-controls input { background: var(--card); color: var(--text); }
+body.dark .template-preview { background: #162032; }
+body.dark .modal-close:hover { background: #334155; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .editor-panels { flex-direction: column; }
+  .input-panel { border-right: none; border-bottom: 1px solid var(--border); }
+  .resize-handle { display: none; }
+}
+
+/* Prevent accidental text selection on toolbar, symbols and preview to avoid
+   auto-copy browser extensions triggering on clicks. */
+.toolbar-btn, .symbol-btn, #preview, .template-preview, .history-item {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  cursor: pointer;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-left">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M4 7V4h16v3M9 20h6M12 4v16"/>
+      </svg>
+      LaTeX 公式编辑器
+    </div>
+  </div>
+  <div class="header-actions">
+    <div class="theme-toggle">
+      <button type="button" class="theme-btn active" data-theme="light">浅色</button>
+      <button type="button" class="theme-btn" data-theme="dark">深色</button>
+    </div>
+    <button type="button" class="btn" id="clearBtn" title="清空">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+      清空
+    </button>
+    <button type="button" class="btn" id="exportBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+      导出
+    </button>
+    <button type="button" class="btn btn-primary" id="copyBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+      复制
+    </button>
+  </div>
+</header>
+
+<!-- Main -->
+<div class="main">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-tabs">
+      <div class="sidebar-tab active" data-panel="symbols">符号</div>
+      <div class="sidebar-tab" data-panel="templates">模板</div>
+      <div class="sidebar-tab" data-panel="history">历史</div>
+    </div>
+    <div class="sidebar-content">
+      <!-- Symbols Panel -->
+      <div class="panel active" id="symbolsPanel"></div>
+      <!-- Templates Panel -->
+      <div class="panel" id="templatesPanel"></div>
+      <!-- History Panel -->
+      <div class="panel" id="historyPanel">
+        <div class="history-empty" id="historyEmpty">暂无历史记录</div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Editor -->
+  <div class="editor-area">
+    <!-- Toolbar -->
+    <div class="toolbar" id="toolbar"></div>
+
+    <!-- Editor Panels -->
+    <div class="editor-panels">
+      <div class="input-panel">
+        <div class="input-header">
+          <span>LaTeX 输入</span>
+          <div class="font-size-controls">
+            <button type="button" class="toolbar-btn" id="fontDecrease" style="width:24px;height:24px;font-size:12px">A-</button>
+            <label for="fontSizeInput" class="sr-only">字体大小</label>
+            <input type="number" id="fontSizeInput" value="15" min="10" max="30" aria-label="字体大小">
+            <button type="button" class="toolbar-btn" id="fontIncrease" style="width:24px;height:24px;font-size:12px">A+</button>
+          </div>
+        </div>
+        <div class="input-wrapper">
+          <textarea id="latexInput" placeholder="在此输入 LaTeX 公式...&#10;&#10;例如: E = mc^2&#10;\frac{-b \pm \sqrt{b^2 - 4ac}}{2a}" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+        </div>
+      </div>
+      <div class="resize-handle" id="resizeHandle"></div>
+      <div class="preview-panel">
+        <div class="preview-header">
+          <span>实时预览</span>
+          <div class="font-size-controls">
+            <span style="font-size:11px;margin-right:4px">预览大小</span>
+            <button type="button" class="toolbar-btn" id="previewDecrease" style="width:24px;height:24px;font-size:12px">-</button>
+            <label for="previewSizeInput" class="sr-only">预览大小</label>
+            <input type="number" id="previewSizeInput" value="24" min="12" max="72" aria-label="预览大小">
+            <button type="button" class="toolbar-btn" id="previewIncrease" style="width:24px;height:24px;font-size:12px">+</button>
+          </div>
+        </div>
+        <div class="preview-wrapper">
+          <div id="preview">
+            <span class="preview-placeholder">预览将显示在此处</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Status bar -->
+    <div class="status-bar">
+      <div class="status-left">
+        <span id="charCount">字符: 0</span>
+        <span id="cursorPos">行 1, 列 1</span>
+      </div>
+      <div class="status-right">
+        <span>KaTeX</span>
+        <span>UTF-8</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Structured Dialog (matrix / cases / braces) -->
+<div class="modal-overlay" id="structuredModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <span class="modal-title" id="structuredTitle">插入</span>
+      <button type="button" class="modal-close" id="structuredClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:flex;gap:16px;margin-bottom:16px;align-items:center" id="structuredRowColArea">
+        <label style="font-size:14px;min-width:50px" for="structuredRows" id="structuredRowLabel">行数</label>
+        <input type="number" id="structuredRows" value="2" min="1" max="20" style="flex:1;height:32px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:14px;outline:none;padding:0 8px;background:var(--card);color:var(--text)" aria-label="行数">
+        <label style="font-size:14px;min-width:50px" for="structuredCols" id="structuredColLabel">列数</label>
+        <input type="number" id="structuredCols" value="2" min="1" max="20" style="flex:1;height:32px;border:1px solid var(--border);border-radius:4px;text-align:center;font-size:14px;outline:none;padding:0 8px;background:var(--card);color:var(--text)" aria-label="列数">
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" class="btn" id="structuredCancel">取消</button>
+        <button type="button" class="btn btn-primary" id="structuredConfirm">确定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Export Modal -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">导出公式</span>
+      <button type="button" class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="export-options">
+        <button type="button" class="export-btn" id="exportSVG">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <span>SVG 图片</span>
+        </button>
+        <button type="button" class="export-btn" id="exportPNG">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+          <span>PNG 图片</span>
+        </button>
+        <button type="button" class="export-btn" id="exportLatex">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          <span>LaTeX 代码</span>
+        </button>
+        <button type="button" class="export-btn" id="exportMathML">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span>MathML</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ==================== Symbol Data ====================
+const symbolData = {
+  '希腊字母': [
+    ['\\alpha','α'], ['\\beta','β'], ['\\gamma','γ'], ['\\delta','δ'],
+    ['\\epsilon','ε'], ['\\zeta','ζ'], ['\\eta','η'], ['\\theta','θ'],
+    ['\\iota','ι'], ['\\kappa','κ'], ['\\lambda','λ'], ['\\mu','μ'],
+    ['\\nu','ν'], ['\\xi','ξ'], ['\\pi','π'], ['\\rho','ρ'],
+    ['\\sigma','σ'], ['\\tau','τ'], ['\\upsilon','υ'], ['\\phi','φ'],
+    ['\\chi','χ'], ['\\psi','ψ'], ['\\omega','ω'],
+    ['\\Alpha','Α'], ['\\Beta','Β'], ['\\Gamma','Γ'], ['\\Delta','Δ'],
+    ['\\Theta','Θ'], ['\\Lambda','Λ'], ['\\Xi','Ξ'], ['\\Pi','Π'],
+    ['\\Sigma','Σ'], ['\\Phi','Φ'], ['\\Psi','Ψ'], ['\\Omega','Ω'],
+    ['\\varepsilon','ε'], ['\\varphi','φ'], ['\\vartheta','ϑ'], ['\\varpi','ϖ']
+  ],
+  '关系运算': [
+    ['<','<'], ['>','>'], ['\\leq','≤'], ['\\geq','≥'], ['\\neq','≠'],
+    ['\\approx','≈'], ['\\equiv','≡'], ['\\sim','∼'], ['\\simeq','≃'],
+    ['\\cong','≅'], ['\\propto','∝'], ['\\ll','≪'], ['\\gg','≫'],
+    ['\\subset','⊂'], ['\\supset','⊃'], ['\\subseteq','⊆'], ['\\supseteq','⊇'],
+    ['\\in','∈'], ['\\notin','∉'], ['\\ni','∋'], ['\\perp','⊥'], ['\\parallel','∥']
+  ],
+  '运算符号': [
+    ['+','+'], ['-','-'], ['\\times','×'], ['\\div','÷'], ['\\pm','±'], ['\\mp','∓'],
+    ['\\cdot','·'], ['\\ast','∗'], ['\\star','⋆'], ['\\circ','∘'],
+    ['\\bullet','•'], ['\\oplus','⊕'], ['\\otimes','⊗'],
+    ['\\cap','∩'], ['\\cup','∪'], ['\\setminus','∖'],
+    ['\\wedge','∧'], ['\\vee','∨'], ['\\neg','¬']
+  ],
+  '箭头': [
+    ['\\rightarrow','→'], ['\\leftarrow','←'], ['\\leftrightarrow','↔'],
+    ['\\Rightarrow','⇒'], ['\\Leftarrow','⇐'], ['\\Leftrightarrow','⇔'],
+    ['\\uparrow','↑'], ['\\downarrow','↓'],
+    ['\\mapsto','↦'], ['\\to','→'], ['\\longrightarrow','⟶'],
+    ['\\nearrow','↗'], ['\\searrow','↘'], ['\\swarrow','↙'], ['\\nwarrow','↖']
+  ],
+  '函数': [
+    ['\\sin','sin'], ['\\cos','cos'], ['\\tan','tan'],
+    ['\\cot','cot'], ['\\sec','sec'], ['\\csc','csc'],
+    ['\\arcsin','arcsin'], ['\\arccos','arccos'], ['\\arctan','arctan'],
+    ['\\sinh','sinh'], ['\\cosh','cosh'], ['\\tanh','tanh'],
+    ['\\log','log'], ['\\ln','ln'], ['\\exp','exp'],
+    ['\\max','max'], ['\\min','min'], ['\\sup','sup'], ['\\inf','inf'],
+    ['\\det','det'], ['\\dim','dim'], ['\\ker','ker'], ['\\deg','deg']
+  ],
+  '其他符号': [
+    ['\\infty','∞'], ['\\partial','∂'], ['\\nabla','∇'],
+    ['\\forall','∀'], ['\\exists','∃'], ['\\emptyset','∅'],
+    ['\\varnothing','∅'], ['\\triangle','△'], ['\\angle','∠'],
+    ['\\degree','°'], ['\\prime','′'], ['\\ell','ℓ'],
+    ['\\hbar','ℏ'], ['\\Im','ℑ'], ['\\Re','ℜ'],
+    ['\\aleph','ℵ'], ['\\beth','ℶ'], ['\\wp','℘'],
+    ['\\therefore','∴'], ['\\because','∵']
+  ]
+};
+
+// ==================== Template Data ====================
+const templateData = [
+  { name: '二次公式', desc: '一元二次方程求根公式', formula: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}' },
+  { name: '欧拉公式', desc: '数学中最优美的公式', formula: 'e^{i\\pi} + 1 = 0' },
+  { name: '勾股定理', desc: '直角三角形基本定理', formula: 'a^2 + b^2 = c^2' },
+  { name: '泰勒展开', desc: '函数的无穷级数展开', formula: 'f(x) = \\sum_{n=0}^{\\infty} \\frac{f^{(n)}(a)}{n!}(x-a)^n' },
+  { name: '矩阵', desc: '2x2 矩阵表示', formula: 'A = \\begin{pmatrix} a_{11} & a_{12} \\\\ a_{21} & a_{22} \\end{pmatrix}' },
+  { name: '行列式', desc: '3x3 行列式', formula: '\\det(A) = \\begin{vmatrix} a & b & c \\\\ d & e & f \\\\ g & h & i \\end{vmatrix}' },
+  { name: '分段函数', desc: '带条件的分段定义', formula: 'f(x) = \\begin{cases} x^2 & x \\geq 0 \\\\ -x & x < 0 \\end{cases}' },
+  { name: '极限', desc: '极限的 epsilon-delta 定义', formula: '\\lim_{x \\to a} f(x) = L' },
+  { name: '定积分', desc: '牛顿-莱布尼茨公式', formula: '\\int_a^b f(x)\\,dx = F(b) - F(a)' },
+  { name: '级数求和', desc: '几何级数', formula: '\\sum_{n=0}^{\\infty} x^n = \\frac{1}{1-x}, \\quad |x| < 1' },
+  { name: '傅里叶级数', desc: '周期函数的三角级数', formula: 'f(x) = \\frac{a_0}{2} + \\sum_{n=1}^{\\infty}\\left(a_n\\cos\\frac{n\\pi x}{L} + b_n\\sin\\frac{n\\pi x}{L}\\right)' },
+  { name: '麦克斯韦方程', desc: '电磁学基本方程组', formula: '\\nabla \\times \\mathbf{E} = -\\frac{\\partial \\mathbf{B}}{\\partial t}' },
+  { name: '薛定谔方程', desc: '量子力学基本方程', formula: 'i\\hbar\\frac{\\partial}{\\partial t}\\Psi(\\mathbf{r},t) = \\hat{H}\\Psi(\\mathbf{r},t)' },
+  { name: '二项式定理', desc: '幂的展开公式', formula: '(a+b)^n = \\sum_{k=0}^{n} \\binom{n}{k} a^{n-k}b^k' },
+  { name: '柯西-施瓦茨', desc: '重要不等式', formula: '\\left|\\sum_{i=1}^n a_i b_i\\right|^2 \\leq \\left(\\sum_{i=1}^n a_i^2\\right)\\left(\\sum_{i=1}^n b_i^2\\right)' },
+  { name: '贝叶斯定理', desc: '概率论基本定理', formula: 'P(A|B) = \\frac{P(B|A)\\,P(A)}{P(B)}' },
+  { name: '正态分布', desc: '高斯分布概率密度', formula: 'f(x) = \\frac{1}{\\sigma\\sqrt{2\\pi}} e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}' },
+  { name: '纳维-斯托克斯', desc: '流体力学方程', formula: '\\rho\\left(\\frac{\\partial \\mathbf{v}}{\\partial t} + \\mathbf{v} \\cdot \\nabla \\mathbf{v}\\right) = -\\nabla p + \\mu\\nabla^2\\mathbf{v} + \\mathbf{f}' },
+  { name: '梯度公式', desc: '向量微积分', formula: '\\nabla f = \\frac{\\partial f}{\\partial x}\\mathbf{i} + \\frac{\\partial f}{\\partial y}\\mathbf{j} + \\frac{\\partial f}{\\partial z}\\mathbf{k}' },
+  { name: '化学方程式', desc: '水的电解', formula: '2H_2O \\xrightarrow{\\text{电解}} 2H_2\\uparrow + O_2\\uparrow' },
+];
+
+// ==================== Toolbar Data ====================
+// insert values use {} as empty placeholders; cursor jumps into the first {} after insertion
+// Special insert values: 'MATRIX_DIALOG', 'CASES_DIALOG', 'LEFT_BRACE_DIALOG', 'RIGHT_BRACE_DIALOG'
+const toolbarData = [
+  // ---- Group 1: 分数/根号 ----
+  {
+    items: [
+      { tex: '\\frac{a}{b}', insert: '\\frac{}{}', tip: '分数', dropdown: {
+        title: '分数与二项式',
+        cols: 4,
+        items: [
+          { tex: '\\frac{a}{b}', insert: '\\frac{}{}', label: '分数' },
+          { tex: '\\dfrac{a}{b}', insert: '\\dfrac{}{}', label: '显示分数' },
+          { tex: '\\tfrac{a}{b}', insert: '\\tfrac{}{}', label: '文本分数' },
+          { tex: '\\cfrac{a}{b}', insert: '\\cfrac{}{}', label: '连分数' },
+          { tex: '\\binom{n}{k}', insert: '\\binom{}{}', label: '二项式' },
+          { tex: '{a \\over b}', insert: '{{} \\over {}}', label: 'over 分数' },
+          { tex: '\\frac{\\partial}{\\partial x}', insert: '\\frac{\\partial}{\\partial {}}', label: '偏导' },
+          { tex: '\\frac{dy}{dx}', insert: '\\frac{d{}}{d{}}', label: '导数' },
+        ]
+      }},
+      { tex: '\\sqrt{x}', insert: '\\sqrt{}', tip: '根号', dropdown: {
+        title: '根号',
+        cols: 4,
+        items: [
+          { tex: '\\sqrt{x}', insert: '\\sqrt{}', label: '平方根' },
+          { tex: '\\sqrt[n]{x}', insert: '\\sqrt[]{}', label: 'n 次根' },
+          { tex: '\\sqrt[3]{x}', insert: '\\sqrt[3]{}', label: '立方根' },
+          { tex: '\\sqrt[4]{x}', insert: '\\sqrt[4]{}', label: '四次根' },
+        ]
+      }},
+    ]
+  },
+  // ---- Group 2: 角标（右上下标/左上下标/正上下标/花括号/方框/一二点）----
+  {
+    items: [
+      { tex: 'x^{n}', insert: '^{}', tip: '角标', dropdown: {
+        title: '角标与标注',
+        cols: 4,
+        items: [
+          { tex: 'x^{n}', insert: '^{}', label: '右上标' },
+          { tex: 'x_{i}', insert: '_{}', label: '右下标' },
+          { tex: 'a^{b}_{c}', insert: '^{}_{}', label: '右上下标' },
+          { tex: '{}^{n}x', insert: '{}^{}', label: '左上标' },
+          { tex: '{}_{i}x', insert: '{}_{}', label: '左下标' },
+          { tex: '{}^{n}_{i}x', insert: '{}^{}_{}', label: '左上下标' },
+          { tex: '\\overset{n}{a}', insert: '\\overset{}{}', label: '正上标' },
+          { tex: '\\underset{i}{a}', insert: '\\underset{}{}', label: '正下标' },
+          { tex: '\\overset{n}{\\underset{i}{a}}', insert: '\\overset{}{\\underset{}{}}', label: '正上下标' },
+          { tex: '\\overbrace{a+b}^{n}', insert: '\\overbrace{}^{}', label: '上花括号' },
+          { tex: '\\underbrace{a+b}_{i}', insert: '\\underbrace{}_{\\quad}', label: '下花括号' },
+          { tex: '\\boxed{E=mc^2}', insert: '\\boxed{}', label: '方框标注' },
+          { tex: '\\dot{x}', insert: '\\dot{}', label: '一点' },
+          { tex: '\\ddot{x}', insert: '\\ddot{}', label: '二点' },
+        ]
+      }},
+    ]
+  },
+  // ---- Group 3: 求和/求积（含正上下标、右上下标）----
+  {
+    items: [
+      { tex: '\\sum', insert: '\\sum_{}^{}', tip: '求和', dropdown: {
+        title: '求和',
+        cols: 4,
+        items: [
+          { tex: '\\sum_{i=0}^{n}', insert: '\\sum_{}^{}', label: '右上下标' },
+          { tex: '\\sum_{i}', insert: '\\sum_{}', label: '右下标' },
+          { tex: '\\sum^{n}', insert: '\\sum^{}', label: '右上标' },
+          { tex: '\\overset{n}{\\sum}', insert: '\\overset{}{\\sum}', label: '正上标' },
+          { tex: '\\underset{i}{\\sum}', insert: '\\underset{}{\\sum}', label: '正下标' },
+          { tex: '\\overset{n}{\\underset{i}{\\sum}}', insert: '\\overset{}{\\underset{}{\\sum}}', label: '正上下标' },
+          { tex: '\\displaystyle\\sum', insert: '\\displaystyle\\sum_{}^{}', label: '显示求和' },
+          { tex: '\\sum\\limits', insert: '\\sum\\limits_{}^{}', label: '限制求和' },
+        ]
+      }},
+      { tex: '\\prod', insert: '\\prod_{}^{}', tip: '求积', dropdown: {
+        title: '求积',
+        cols: 4,
+        items: [
+          { tex: '\\prod', insert: '\\prod', label: '无标' },
+          { tex: '\\prod_{i}', insert: '\\prod_{}', label: '右下标' },
+          { tex: '\\prod^{n}', insert: '\\prod^{}', label: '右上标' },
+          { tex: '\\prod_{i}^{n}', insert: '\\prod_{}^{}', label: '右上下标' },
+          { tex: '\\overset{n}{\\prod}', insert: '\\overset{}{\\prod}', label: '正上标' },
+          { tex: '\\underset{i}{\\prod}', insert: '\\underset{}{\\prod}', label: '正下标' },
+          { tex: '\\overset{n}{\\underset{i}{\\prod}}', insert: '\\overset{}{\\underset{}{\\prod}}', label: '正上下标' },
+          { tex: '\\displaystyle\\prod', insert: '\\displaystyle\\prod_{}^{}', label: '显示求积' },
+        ]
+      }},
+      { tex: '\\coprod', insert: '\\coprod_{}^{}', tip: '余积', dropdown: {
+        title: '余积',
+        cols: 4,
+        items: [
+          { tex: '\\coprod', insert: '\\coprod', label: '无标' },
+          { tex: '\\coprod_{i}', insert: '\\coprod_{}', label: '右下标' },
+          { tex: '\\coprod^{n}', insert: '\\coprod^{}', label: '右上标' },
+          { tex: '\\coprod_{i}^{n}', insert: '\\coprod_{}^{}', label: '右上下标' },
+          { tex: '\\overset{n}{\\coprod}', insert: '\\overset{}{\\coprod}', label: '正上标' },
+          { tex: '\\underset{i}{\\coprod}', insert: '\\underset{}{\\coprod}', label: '正下标' },
+          { tex: '\\overset{n}{\\underset{i}{\\coprod}}', insert: '\\overset{}{\\underset{}{\\coprod}}', label: '正上下标' },
+        ]
+      }},
+      { tex: '\\bigcup', insert: '\\bigcup_{}^{}', tip: '并集', dropdown: {
+        title: '并集',
+        cols: 4,
+        items: [
+          { tex: '\\bigcup', insert: '\\bigcup', label: '无标' },
+          { tex: '\\bigcup_{i}', insert: '\\bigcup_{}', label: '右下标' },
+          { tex: '\\bigcup^{n}', insert: '\\bigcup^{}', label: '右上标' },
+          { tex: '\\bigcup_{i}^{n}', insert: '\\bigcup_{}^{}', label: '右上下标' },
+          { tex: '\\overset{n}{\\bigcup}', insert: '\\overset{}{\\bigcup}', label: '正上标' },
+          { tex: '\\underset{i}{\\bigcup}', insert: '\\underset{}{\\bigcup}', label: '正下标' },
+          { tex: '\\overset{n}{\\underset{i}{\\bigcup}}', insert: '\\overset{}{\\underset{}{\\bigcup}}', label: '正上下标' },
+        ]
+      }},
+      { tex: '\\bigcap', insert: '\\bigcap_{}^{}', tip: '交集', dropdown: {
+        title: '交集',
+        cols: 4,
+        items: [
+          { tex: '\\bigcap', insert: '\\bigcap', label: '无标' },
+          { tex: '\\bigcap_{i}', insert: '\\bigcap_{}', label: '右下标' },
+          { tex: '\\bigcap^{n}', insert: '\\bigcap^{}', label: '右上标' },
+          { tex: '\\bigcap_{i}^{n}', insert: '\\bigcap_{}^{}', label: '右上下标' },
+          { tex: '\\overset{n}{\\bigcap}', insert: '\\overset{}{\\bigcap}', label: '正上标' },
+          { tex: '\\underset{i}{\\bigcap}', insert: '\\underset{}{\\bigcap}', label: '正下标' },
+          { tex: '\\overset{n}{\\underset{i}{\\bigcap}}', insert: '\\overset{}{\\underset{}{\\bigcap}}', label: '正上下标' },
+        ]
+      }},
+    ]
+  },
+  // ---- Group 4: 积分/极限（含正上下标、多重积分角标）----
+  {
+    items: [
+      { tex: '\\int', insert: '\\int_{}^{}', tip: '积分', dropdown: {
+        title: '积分',
+        cols: 4,
+        items: [
+          { tex: '\\int', insert: '\\int {}\\,d{}', label: '不定积分' },
+          { tex: '\\int_{a}', insert: '\\int_{}', label: '右下标' },
+          { tex: '\\int^{b}', insert: '\\int^{}', label: '右上标' },
+          { tex: '\\int_{a}^{b}', insert: '\\int_{}^{}', label: '右上下标' },
+          { tex: '\\overset{a}{\\int}', insert: '\\overset{}{\\int}', label: '正上标' },
+          { tex: '\\underset{a}{\\int}', insert: '\\underset{}{\\int}', label: '正下标' },
+          { tex: '\\overset{a}{\\underset{b}{\\int}}', insert: '\\overset{}{\\underset{}{\\int}}', label: '正上下标' },
+          { tex: '\\iint', insert: '\\iint', label: '二重(无标)' },
+          { tex: '\\iint_{a}', insert: '\\iint_{}', label: '二重(右下)' },
+          { tex: '\\iint^{b}', insert: '\\iint^{}', label: '二重(右上)' },
+          { tex: '\\iint_{a}^{b}', insert: '\\iint_{}^{}', label: '二重(右上下)' },
+          { tex: '\\overset{a}{\\iint}', insert: '\\overset{}{\\iint}', label: '二重(正上)' },
+          { tex: '\\underset{a}{\\iint}', insert: '\\underset{}{\\iint}', label: '二重(正下)' },
+          { tex: '\\overset{a}{\\underset{b}{\\iint}}', insert: '\\overset{}{\\underset{}{\\iint}}', label: '二重(正上下)' },
+          { tex: '\\iiint', insert: '\\iiint', label: '三重(无标)' },
+          { tex: '\\iiint_{a}', insert: '\\iiint_{}', label: '三重(右下)' },
+          { tex: '\\iiint^{b}', insert: '\\iiint^{}', label: '三重(右上)' },
+          { tex: '\\iiint_{a}^{b}', insert: '\\iiint_{}^{}', label: '三重(右上下)' },
+          { tex: '\\overset{a}{\\iiint}', insert: '\\overset{}{\\iiint}', label: '三重(正上)' },
+          { tex: '\\underset{a}{\\iiint}', insert: '\\underset{}{\\iiint}', label: '三重(正下)' },
+          { tex: '\\overset{a}{\\underset{b}{\\iiint}}', insert: '\\overset{}{\\underset{}{\\iiint}}', label: '三重(正上下)' },
+          { tex: '\\oint', insert: '\\oint', label: '曲线(无标)' },
+          { tex: '\\oint_{a}', insert: '\\oint_{}', label: '曲线(右下)' },
+          { tex: '\\oint^{b}', insert: '\\oint^{}', label: '曲线(右上)' },
+          { tex: '\\oint_{a}^{b}', insert: '\\oint_{}^{}', label: '曲线(右上下)' },
+          { tex: '\\overset{a}{\\oint}', insert: '\\overset{}{\\oint}', label: '曲线(正上)' },
+          { tex: '\\underset{a}{\\oint}', insert: '\\underset{}{\\oint}', label: '曲线(正下)' },
+          { tex: '\\overset{a}{\\underset{b}{\\oint}}', insert: '\\overset{}{\\underset{}{\\oint}}', label: '曲线(正上下)' },
+          { tex: '\\oiint', insert: '\\oiint', label: '曲面(无标)' },
+          { tex: '\\oiint_{a}', insert: '\\oiint_{}', label: '曲面(右下)' },
+          { tex: '\\oiint^{b}', insert: '\\oiint^{}', label: '曲面(右上)' },
+          { tex: '\\oiint_{a}^{b}', insert: '\\oiint_{}^{}', label: '曲面(右上下)' },
+          { tex: '\\overset{a}{\\oiint}', insert: '\\overset{}{\\oiint}', label: '曲面(正上)' },
+          { tex: '\\underset{a}{\\oiint}', insert: '\\underset{}{\\oiint}', label: '曲面(正下)' },
+          { tex: '\\overset{a}{\\underset{b}{\\oiint}}', insert: '\\overset{}{\\underset{}{\\oiint}}', label: '曲面(正上下)' },
+          { tex: '\\displaystyle\\int', insert: '\\displaystyle\\int_{}^{}', label: '显示积分' },
+        ]
+      }},
+      { tex: '\\lim', insert: '\\lim_{}', tip: '极限', dropdown: {
+        title: '极限与运算',
+        cols: 4,
+        items: [
+          { tex: '\\lim_{x \\to \\infty}', insert: '\\lim_{x \\to \\infty}', label: '无穷极限' },
+          { tex: '\\lim_{x \\to 0}', insert: '\\lim_{x \\to 0}', label: '趋零极限' },
+          { tex: '\\lim_{n \\to \\infty}', insert: '\\lim_{n \\to \\infty}', label: '数列极限' },
+          { tex: '\\underset{x \\to 0}{\\lim}', insert: '\\underset{}{\\lim}', label: '正下标' },
+          { tex: '\\limsup', insert: '\\limsup_{}', label: '上极限' },
+          { tex: '\\liminf', insert: '\\liminf_{}', label: '下极限' },
+          { tex: '\\varlimsup', insert: '\\varlimsup_{}', label: '上极限符号' },
+          { tex: '\\varliminf', insert: '\\varliminf_{}', label: '下极限符号' },
+          { tex: '\\max', insert: '\\max_{}', label: '最大值' },
+          { tex: '\\min', insert: '\\min_{}', label: '最小值' },
+          { tex: '\\sup', insert: '\\sup_{}', label: '上确界' },
+          { tex: '\\inf', insert: '\\inf_{}', label: '下确界' },
+        ]
+      }},
+    ]
+  },
+  // ---- Group 5: 括号（含单左/右大括号对话框）----
+  {
+    items: [
+      { tex: '\\left( \\right)', insert: '\\left( {} \\right)', tip: '括号', dropdown: {
+        title: '括号与围栏',
+        cols: 4,
+        items: [
+          { tex: '\\left( \\right)', insert: '\\left( {} \\right)', label: '圆括号' },
+          { tex: '\\left[ \\right]', insert: '\\left[ {} \\right]', label: '方括号' },
+          { tex: '\\left\\{ \\right\\}', insert: '\\left\\{ {} \\right\\}', label: '花括号' },
+          { tex: '\\left| \\right|', insert: '\\left| {} \\right|', label: '绝对值' },
+          { tex: '\\left\\| \\right\\|', insert: '\\left\\| {} \\right\\|', label: '范数' },
+          { tex: '\\left\\lfloor \\right\\rfloor', insert: '\\left\\lfloor {} \\right\\rfloor', label: '下取整' },
+          { tex: '\\left\\lceil \\right\\rceil', insert: '\\left\\lceil {} \\right\\rceil', label: '上取整' },
+          { tex: '\\left\\langle \\right\\rangle', insert: '\\left\\langle {} \\right\\rangle', label: '角括号' },
+          { tex: '\\left. \\right\\}', insert: 'LEFT_BRACE_DIALOG', label: '单左大括号' },
+          { tex: '\\left\\{ \\right.', insert: 'RIGHT_BRACE_DIALOG', label: '单右大括号' },
+        ]
+      }},
+    ]
+  },
+  // ---- Group 6: 矩阵/分段（均可设置行列数，含右大括号）----
+  {
+    items: [
+      { tex: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}', insert: 'MATRIX_DIALOG', tip: '矩阵', dropdown: {
+        title: '矩阵（点击后输入行列数）',
+        cols: 3,
+        items: [
+          { tex: '\\begin{matrix} a & b \\\\ c & d \\end{matrix}', insert: 'matrix', label: 'matrix' },
+          { tex: '\\begin{pmatrix} a & b \\\\ c & d \\end{pmatrix}', insert: 'pmatrix', label: 'pmatrix' },
+          { tex: '\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}', insert: 'bmatrix', label: 'bmatrix' },
+          { tex: '\\begin{Bmatrix} a & b \\\\ c & d \\end{Bmatrix}', insert: 'Bmatrix', label: 'Bmatrix' },
+          { tex: '\\begin{vmatrix} a & b \\\\ c & d \\end{vmatrix}', insert: 'vmatrix', label: 'vmatrix' },
+          { tex: '\\begin{Vmatrix} a & b \\\\ c & d \\end{Vmatrix}', insert: 'Vmatrix', label: 'Vmatrix' },
+          { tex: '\\begin{smallmatrix} a & b \\\\ c & d \\end{smallmatrix}', insert: 'smallmatrix', label: 'smallmatrix' },
+        ]
+      }},
+      { tex: '\\begin{cases} a \\\\ b \\end{cases}', insert: 'CASES_DIALOG', tip: '分段', dropdown: {
+        title: '分段与对齐（点击后输入行/列数）',
+        cols: 3,
+        items: [
+          { tex: '\\begin{cases} a \\\\ b \\end{cases}', insert: 'cases', label: '分段函数(左括号)' },
+          { tex: '\\left.\\begin{array}{l} a \\\\ b \\end{array}\\right\\}', insert: 'RIGHT_CASES_DIALOG', label: '分段函数(右括号)' },
+          { tex: '\\begin{aligned} a &= b \\\\ c &= d \\end{aligned}', insert: 'aligned', label: '对齐方程' },
+          { tex: '\\begin{array}{ll} a & b \\\\ c & d \\end{array}', insert: 'array', label: '数组' },
+          { tex: '\\begin{gathered} a \\\\ b \\end{gathered}', insert: 'gathered', label: '居中排列' },
+        ]
+      }},
+    ]
+  },
+  // ---- Group 7: 装饰 ----
+  {
+    items: [
+      { tex: '\\vec{v}', insert: '\\vec{}', tip: '装饰', dropdown: {
+        title: '装饰符号',
+        cols: 4,
+        items: [
+          { tex: '\\vec{v}', insert: '\\vec{}', label: '向量' },
+          { tex: '\\hat{x}', insert: '\\hat{}', label: '帽' },
+          { tex: '\\bar{x}', insert: '\\bar{}', label: '横线' },
+          { tex: '\\tilde{x}', insert: '\\tilde{}', label: '波浪' },
+          { tex: '\\check{x}', insert: '\\check{}', label: '倒帽' },
+          { tex: '\\acute{x}', insert: '\\acute{}', label: '尖音' },
+          { tex: '\\grave{x}', insert: '\\grave{}', label: '沉音' },
+          { tex: '\\breve{x}', insert: '\\breve{}', label: '短音' },
+          { tex: '\\overline{xyz}', insert: '\\overline{}', label: '上划线' },
+          { tex: '\\underline{xyz}', insert: '\\underline{}', label: '下划线' },
+          { tex: '\\widehat{xyz}', insert: '\\widehat{}', label: '宽帽' },
+          { tex: '\\widetilde{xyz}', insert: '\\widetilde{}', label: '宽波浪' },
+          { tex: '\\overrightarrow{AB}', insert: '\\overrightarrow{}', label: '右箭头' },
+          { tex: '\\overleftarrow{AB}', insert: '\\overleftarrow{}', label: '左箭头' },
+        ]
+      }},
+    ]
+  },
+  // ---- Group 8: 字体 ----
+  {
+    items: [
+      { tex: '\\mathbb{R}', insert: '\\mathbb{}', tip: '字体', dropdown: {
+        title: '数学字体',
+        cols: 4,
+        items: [
+          { tex: '\\mathbb{R}', insert: '\\mathbb{}', label: '黑板粗体' },
+          { tex: '\\mathbf{x}', insert: '\\mathbf{}', label: '粗体' },
+          { tex: '\\mathcal{L}', insert: '\\mathcal{}', label: '花体' },
+          { tex: '\\mathfrak{g}', insert: '\\mathfrak{}', label: '哥特体' },
+          { tex: '\\mathscr{F}', insert: '\\mathscr{}', label: '手写体' },
+          { tex: '\\mathsf{x}', insert: '\\mathsf{}', label: '无衬线' },
+          { tex: '\\mathtt{x}', insert: '\\mathtt{}', label: '等宽体' },
+          { tex: '\\mathit{x}', insert: '\\mathit{}', label: '斜体' },
+          { tex: '\\mathrm{x}', insert: '\\mathrm{}', label: '罗马体' },
+          { tex: '\\boldsymbol{x}', insert: '\\boldsymbol{}', label: '数学粗体' },
+          { tex: '\\operatorname{argmax}', insert: '\\operatorname{}', label: '算子名' },
+          { tex: '\\text{文字}', insert: '\\text{}', label: '文本' },
+        ]
+      }},
+    ]
+  },
+];
+
+// ==================== Build Toolbar ====================
+function buildToolbar() {
+  const toolbar = document.getElementById('toolbar');
+  toolbarData.forEach((group) => {
+    const gDiv = document.createElement('div');
+    gDiv.className = 'toolbar-group';
+    group.items.forEach((item) => {
+      if (item.dropdown) {
+        // Button with dropdown
+        const wrap = document.createElement('div');
+        wrap.className = 'toolbar-btn-wrap';
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toolbar-btn has-dropdown';
+        btn.title = item.tip;
+        const span = document.createElement('span');
+        span.className = 'katex-tex';
+        try { katex.render(item.tex, span, { throwOnError: false, strict: false }); } catch(e) { span.textContent = item.tip; }
+        btn.appendChild(span);
+
+        // Build dropdown (appended to body to escape overflow clipping)
+        const dd = document.createElement('div');
+        dd.className = 'toolbar-dropdown';
+        dd.dataset.owner = 'toolbar-dd';
+        if (item.dropdown.title) {
+          const ddTitle = document.createElement('div');
+          ddTitle.className = 'toolbar-dropdown-title';
+          ddTitle.textContent = item.dropdown.title;
+          dd.appendChild(ddTitle);
+        }
+        const grid = document.createElement('div');
+        grid.className = 'toolbar-dropdown-grid' + (item.dropdown.cols ? ' cols-' + item.dropdown.cols : '');
+        item.dropdown.items.forEach((di) => {
+          const dItem = document.createElement('button');
+          dItem.type = 'button';
+          dItem.className = 'toolbar-dropdown-item';
+          dItem.dataset.insert = di.insert;
+          const dSpan = document.createElement('span');
+          try { katex.render(di.tex, dSpan, { throwOnError: false, strict: false }); } catch(e) { dSpan.textContent = di.label || ''; }
+          dItem.appendChild(dSpan);
+          if (di.label) {
+            const dLabel = document.createElement('span');
+            dLabel.className = 'item-label';
+            dLabel.textContent = di.label;
+            dItem.appendChild(dLabel);
+          }
+          dItem.addEventListener('click', (e) => {
+            e.stopPropagation();
+            closeAllDropdowns();
+            // Dialog-based items
+            const matrixEnvs = ['matrix','pmatrix','bmatrix','Bmatrix','vmatrix','Vmatrix','smallmatrix'];
+            const casesEnvs = ['cases','aligned','array','gathered'];
+            if (matrixEnvs.includes(di.insert)) {
+              openStructuredDialog('matrix', di.insert);
+            } else if (casesEnvs.includes(di.insert)) {
+              openStructuredDialog('cases', di.insert);
+            } else if (di.insert === 'RIGHT_CASES_DIALOG') {
+              openStructuredDialog('right_cases', '');
+            } else if (di.insert === 'LEFT_BRACE_DIALOG') {
+              openStructuredDialog('left_brace', '');
+            } else if (di.insert === 'RIGHT_BRACE_DIALOG') {
+              openStructuredDialog('right_brace', '');
+            } else {
+              insertAtCursor(di.insert);
+            }
+          });
+          grid.appendChild(dItem);
+        });
+        dd.appendChild(grid);
+        document.body.appendChild(dd);
+        // Prevent clicks inside dropdown from closing it
+        dd.addEventListener('click', (e) => e.stopPropagation());
+
+        // Position dropdown relative to button
+        function positionDropdown() {
+          const rect = btn.getBoundingClientRect();
+          dd.style.position = 'fixed';
+          dd.style.top = (rect.bottom + 4) + 'px';
+          dd.style.left = rect.left + 'px';
+          // Keep within viewport
+          requestAnimationFrame(() => {
+            const ddRect = dd.getBoundingClientRect();
+            if (ddRect.right > window.innerWidth) {
+              dd.style.left = (window.innerWidth - ddRect.width - 8) + 'px';
+            }
+            if (ddRect.bottom > window.innerHeight) {
+              dd.style.top = (rect.top - ddRect.height - 4) + 'px';
+            }
+          });
+        }
+
+        // Toggle dropdown on click
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const wasOpen = dd.classList.contains('show');
+          closeAllDropdowns();
+          if (!wasOpen) {
+            positionDropdown();
+            dd.classList.add('show');
+          }
+        });
+
+        // Also insert default on double-click
+        btn.addEventListener('dblclick', (e) => {
+          e.stopPropagation();
+          closeAllDropdowns();
+          if (item.insert === 'MATRIX_DIALOG') {
+            openStructuredDialog('matrix', 'pmatrix');
+          } else if (item.insert === 'CASES_DIALOG') {
+            openStructuredDialog('cases', 'cases');
+          } else if (item.insert === 'LEFT_BRACE_DIALOG' || item.insert === 'RIGHT_BRACE_DIALOG') {
+            openStructuredDialog('left_brace', '');
+          } else {
+            insertAtCursor(item.insert);
+          }
+        });
+
+        wrap.appendChild(btn);
+        gDiv.appendChild(wrap);
+      } else {
+        // Simple button
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'toolbar-btn';
+        btn.title = item.tip;
+        btn.dataset.insert = item.insert;
+        const span = document.createElement('span');
+        span.className = 'katex-tex';
+        try { katex.render(item.tex, span, { throwOnError: false, strict: false }); } catch(e) { span.textContent = item.tip; }
+        btn.appendChild(span);
+        btn.addEventListener('click', () => insertAtCursor(item.insert));
+        gDiv.appendChild(btn);
+      }
+    });
+    toolbar.appendChild(gDiv);
+  });
+}
+
+function closeAllDropdowns() {
+  document.querySelectorAll('.toolbar-dropdown.show').forEach(d => d.classList.remove('show'));
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', () => closeAllDropdowns());
+
+// ==================== DOM Elements ====================
+const latexInput = document.getElementById('latexInput');
+const preview = document.getElementById('preview');
+const charCount = document.getElementById('charCount');
+const cursorPos = document.getElementById('cursorPos');
+const previewSizeInput = document.getElementById('previewSizeInput');
+const fontSizeInput = document.getElementById('fontSizeInput');
+const toastContainer = document.getElementById('toastContainer');
+
+let previewFontSize = 24;
+let inputFontSize = 15;
+let history = JSON.parse(localStorage.getItem('latex_history') || '[]');
+
+// ==================== Render Preview ====================
+let renderTimer = null;
+// ---- Preview cursor tracking ----
+// How many brace-group arguments a LaTeX command expects
+// ---- Marker-based cursor positioning ----
+// Insert a marker | at cursor position, render full formula, find marker in DOM, style it as cursor.
+const MARKER_CHAR = '|';
+
+function renderPreview() {
+  const tex = latexInput.value;
+  const trimmed = tex.trim();
+  if (!trimmed) {
+    preview.innerHTML = '<span class="preview-placeholder">预览将显示在此处</span>';
+    return;
+  }
+
+  const cursorPos = latexInput.selectionStart;
+  const trimOffset = tex.indexOf(trimmed);
+  const pos = cursorPos - trimOffset;
+  const showCursor = pos >= 0 && pos <= trimmed.length;
+
+  // Try rendering with marker at cursor position
+  if (showCursor) {
+    const formulaWithMarker = trimmed.substring(0, pos) + '\\text{' + MARKER_CHAR + '}' + trimmed.substring(pos);
+    try {
+      katex.render(formulaWithMarker, preview, {
+        displayMode: true, throwOnError: true, trust: true, strict: false,
+        macros: { '\\xrightarrow': '\\overset{#1}{\\longrightarrow}' }
+      });
+      preview.style.fontSize = previewFontSize + 'px';
+
+      // Find the marker text node and style it as a blinking cursor
+      const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent === MARKER_CHAR) {
+          const markerEl = walker.currentNode.parentElement;
+          // Style the marker itself as the cursor — no extra element needed
+          markerEl.style.color = '#4361ee';
+          markerEl.style.fontWeight = 'bold';
+          markerEl.style.animation = 'cursorBlink 1s step-end infinite';
+          return;
+        }
+      }
+    } catch (e) {
+      // Marker caused render error, fall through to clean render
+    }
+  }
+
+  // Clean render without cursor
+  try {
+    katex.render(trimmed, preview, {
+      displayMode: true, throwOnError: true, trust: true, strict: false,
+      macros: { '\\xrightarrow': '\\overset{#1}{\\longrightarrow}' }
+    });
+    preview.style.fontSize = previewFontSize + 'px';
+  } catch (e) {
+    preview.innerHTML = '<span class="preview-error">' + e.message + '</span>';
+  }
+}
+
+// ---- Click-to-cursor: reverse mapping from preview click to source position ----
+// Two-step approach:
+//   Step 1: Use the formula's rendered bounding box for proportional x mapping (approximate)
+//   Step 2: Refine by rendering with a marker at the approximate position,
+//           finding the marker's actual position, and adjusting if needed.
+//   This avoids comparing coordinates across different renders.
+
+preview.addEventListener('click', (e) => {
+  const tex = latexInput.value.trim();
+  if (!tex) return;
+
+  const wrapper = preview.parentElement;
+  const wRect = wrapper.getBoundingClientRect();
+  const clickX = e.clientX - wRect.left + wrapper.scrollLeft;
+  const clickY = e.clientY - wRect.top + wrapper.scrollTop;
+
+  // Step 1: Get the formula's rendered bounding box from the clean render
+  const katexEl = preview.querySelector('.katex-html');
+  if (!katexEl) return;
+  const formulaRect = katexEl.getBoundingClientRect();
+  const formulaLeft = formulaRect.left - wRect.left + wrapper.scrollLeft;
+  const formulaWidth = formulaRect.width;
+
+  if (formulaWidth <= 0) return;
+
+  // Proportional mapping: click position relative to formula bounds → source position
+  const ratio = (clickX - formulaLeft) / formulaWidth;
+  const clampedRatio = Math.max(0, Math.min(1, ratio));
+  let approxPos = Math.round(clampedRatio * tex.length);
+
+  // Step 2: Refine — render with marker at approxPos, check if marker is closer to click
+  const MARKER = '\\text{|}';
+  let bestPos = approxPos;
+
+  // Try approxPos and neighbors to find the closest match
+  const candidates = [approxPos];
+  if (approxPos > 0) candidates.push(approxPos - 1);
+  if (approxPos < tex.length) candidates.push(approxPos + 1);
+
+  let bestDist = Infinity;
+  for (const cand of candidates) {
+    const f = tex.substring(0, cand) + MARKER + tex.substring(cand);
+    try {
+      katex.render(f, preview, {
+        displayMode: true, throwOnError: true, trust: true, strict: false,
+        macros: { '\\xrightarrow': '\\overset{#1}{\\longrightarrow}' }
+      });
+      const walker = document.createTreeWalker(preview, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        if (walker.currentNode.textContent === '|') {
+          const mRect = walker.currentNode.parentElement.getBoundingClientRect();
+          const mx = mRect.left - wRect.left + wrapper.scrollLeft;
+          const dx = mx - clickX;
+          if (dx * dx < bestDist) {
+            bestDist = dx * dx;
+            bestPos = cand;
+          }
+          break;
+        }
+      }
+    } catch (err) {}
+  }
+
+  const trimOffset = latexInput.value.indexOf(tex);
+  const absolutePos = trimOffset + bestPos;
+
+  latexInput.setSelectionRange(absolutePos, absolutePos);
+  latexInput.focus();
+  updateStatus();
+  renderPreview();
+});
+
+function debouncedRender() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(renderPreview, 80);
+}
+
+latexInput.addEventListener('input', () => {
+  posMapCache = null; // invalidate position map
+  debouncedRender();
+  updateStatus();
+});
+
+// ==================== Status Bar ====================
+function updateStatus() {
+  const text = latexInput.value;
+  charCount.textContent = `字符: ${text.length}`;
+  const pos = latexInput.selectionStart;
+  const lines = text.substring(0, pos).split('\n');
+  cursorPos.textContent = `行 ${lines.length}, 列 ${lines[lines.length - 1].length + 1}`;
+}
+
+latexInput.addEventListener('click', () => { updateStatus(); renderPreview(); });
+latexInput.addEventListener('mouseup', () => { setTimeout(() => { updateStatus(); renderPreview(); }, 0); });
+latexInput.addEventListener('keyup', (e) => {
+  updateStatus();
+  // Re-render on cursor movement keys
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','Tab'].includes(e.key)) {
+    renderPreview();
+  }
+});
+
+// ==================== Insert Text with Placeholder Support ====================
+let historyTimer = null;
+let placeholderPositions = []; // tracks all {} positions in current insertion
+let placeholderIdx = -1;       // which placeholder we're currently at
+
+function insertAtCursor(text) {
+  const start = latexInput.selectionStart;
+  const end = latexInput.selectionEnd;
+  const value = latexInput.value;
+  latexInput.value = value.substring(0, start) + text + value.substring(end);
+
+  // Find all {} placeholder positions relative to insertion start
+  placeholderPositions = [];
+  const phRe = /\{\}/g;
+  let m;
+  while ((m = phRe.exec(text)) !== null) {
+    placeholderPositions.push(start + m.index);
+  }
+
+  if (placeholderPositions.length > 0) {
+    // Place cursor inside the first {}: right after the '{'
+    const firstPos = placeholderPositions[0];
+    latexInput.setSelectionRange(firstPos + 1, firstPos + 1);
+    placeholderIdx = 0;
+  } else {
+    latexInput.setSelectionRange(start + text.length, start + text.length);
+    placeholderIdx = -1;
+  }
+
+  latexInput.focus();
+  debouncedRender();
+  updateStatus();
+  clearTimeout(historyTimer);
+  historyTimer = setTimeout(() => addToHistory(latexInput.value), 2000);
+}
+
+// Navigate to next placeholder via Tab
+function jumpToNextPlaceholder() {
+  if (placeholderPositions.length === 0) return false;
+  // Move to next placeholder
+  placeholderIdx++;
+  if (placeholderIdx >= placeholderPositions.length) {
+    // Went past last placeholder — put cursor at end of inserted region
+    const lastPos = placeholderPositions[placeholderPositions.length - 1];
+    latexInput.setSelectionRange(lastPos + 2, lastPos + 2);
+    placeholderIdx = -1;
+    placeholderPositions = [];
+    return false;
+  }
+  const pos = placeholderPositions[placeholderIdx];
+  latexInput.setSelectionRange(pos + 1, pos + 1);
+  return true;
+}
+
+// ==================== Sidebar ====================
+document.querySelectorAll('.sidebar-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById(tab.dataset.panel + 'Panel').classList.add('active');
+  });
+});
+
+// ==================== Build Symbols ====================
+function buildSymbols() {
+  const container = document.getElementById('symbolsPanel');
+  for (const [category, symbols] of Object.entries(symbolData)) {
+    const cat = document.createElement('div');
+    cat.className = 'symbol-category';
+    cat.innerHTML = `<div class="category-title">${category}</div>`;
+    const grid = document.createElement('div');
+    grid.className = 'symbol-grid';
+    for (const [cmd, display] of symbols) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'symbol-btn';
+      btn.title = cmd;
+      try {
+        // Prefer rendering the LaTeX command when available (avoids missing metrics for certain Unicode glyphs)
+        if (typeof cmd === 'string' && cmd.startsWith('\\')) {
+          katex.render(cmd, btn, { throwOnError: false, strict: false });
+        } else {
+          katex.render(display, btn, { throwOnError: false, strict: false });
+        }
+      } catch(e) {
+        // Fallback to plain text if KaTeX can't render
+        btn.textContent = display;
+      }
+      // store command for robust interception
+      try { btn.dataset.cmd = cmd; } catch (e) { }
+      btn.addEventListener('click', () => insertAtCursor(cmd));
+      grid.appendChild(btn);
+    }
+    cat.appendChild(grid);
+    container.appendChild(cat);
+  }
+}
+
+// ==================== Build Templates ====================
+function buildTemplates() {
+  const container = document.getElementById('templatesPanel');
+  const list = document.createElement('div');
+  list.className = 'template-list';
+  for (const tpl of templateData) {
+    const item = document.createElement('div');
+    item.className = 'template-item';
+    const previewDiv = document.createElement('div');
+    previewDiv.className = 'template-preview';
+    try {
+      katex.render(tpl.formula, previewDiv, { displayMode: false, throwOnError: false, strict: false });
+    } catch(e) {
+      previewDiv.textContent = '?';
+    }
+    const info = document.createElement('div');
+    info.className = 'template-info';
+    info.innerHTML = `<div class="template-name">${tpl.name}</div><div class="template-desc">${tpl.desc}</div>`;
+    item.appendChild(previewDiv);
+    item.appendChild(info);
+    // expose formula on element for interception handlers
+    try { item.dataset.formula = tpl.formula; } catch (e) { }
+    item.addEventListener('click', () => {
+      latexInput.value = tpl.formula;
+      debouncedRender();
+      updateStatus();
+      addToHistory(tpl.formula);
+    });
+    list.appendChild(item);
+  }
+  container.appendChild(list);
+}
+
+// ==================== History ====================
+function addToHistory(formula) {
+  if (!formula.trim()) return;
+  history = history.filter(h => h.formula !== formula);
+  history.unshift({ formula, time: Date.now() });
+  if (history.length > 50) history = history.slice(0, 50);
+  localStorage.setItem('latex_history', JSON.stringify(history));
+  renderHistory();
+}
+
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  if (history.length === 0) {
+    empty.style.display = 'block';
+    list.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+  list.innerHTML = '';
+  for (const item of history) {
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    const formulaDiv = document.createElement('div');
+    formulaDiv.className = 'history-formula';
+    try {
+      katex.render(item.formula, formulaDiv, { displayMode: false, throwOnError: false, strict: false });
+    } catch(e) {
+      formulaDiv.textContent = item.formula;
+    }
+    const timeDiv = document.createElement('div');
+    timeDiv.className = 'history-time';
+    timeDiv.textContent = new Date(item.time).toLocaleString('zh-CN');
+    div.appendChild(formulaDiv);
+    div.appendChild(timeDiv);
+    try { div.dataset.formula = item.formula; } catch (e) { }
+    div.addEventListener('click', () => {
+      latexInput.value = item.formula;
+      debouncedRender();
+      updateStatus();
+    });
+    list.appendChild(div);
+  }
+}
+
+// ==================== Font Size ====================
+fontSizeInput.addEventListener('change', () => {
+  inputFontSize = Math.max(10, Math.min(30, parseInt(fontSizeInput.value) || 15));
+  fontSizeInput.value = inputFontSize;
+  latexInput.style.fontSize = inputFontSize + 'px';
+});
+
+document.getElementById('fontDecrease').addEventListener('click', () => {
+  inputFontSize = Math.max(10, inputFontSize - 1);
+  fontSizeInput.value = inputFontSize;
+  latexInput.style.fontSize = inputFontSize + 'px';
+});
+
+document.getElementById('fontIncrease').addEventListener('click', () => {
+  inputFontSize = Math.min(30, inputFontSize + 1);
+  fontSizeInput.value = inputFontSize;
+  latexInput.style.fontSize = inputFontSize + 'px';
+});
+
+previewSizeInput.addEventListener('change', () => {
+  previewFontSize = Math.max(12, Math.min(72, parseInt(previewSizeInput.value) || 24));
+  previewSizeInput.value = previewFontSize;
+  preview.style.fontSize = previewFontSize + 'px';
+  posMapCache = null;
+});
+
+document.getElementById('previewDecrease').addEventListener('click', () => {
+  previewFontSize = Math.max(12, previewFontSize - 2);
+  previewSizeInput.value = previewFontSize;
+  preview.style.fontSize = previewFontSize + 'px';
+  posMapCache = null;
+});
+
+document.getElementById('previewIncrease').addEventListener('click', () => {
+  previewFontSize = Math.min(72, previewFontSize + 2);
+  previewSizeInput.value = previewFontSize;
+  preview.style.fontSize = previewFontSize + 'px';
+  posMapCache = null;
+});
+
+// ==================== Resize Handle ====================
+const resizeHandle = document.getElementById('resizeHandle');
+const inputPanel = document.querySelector('.input-panel');
+const previewPanel = document.querySelector('.preview-panel');
+let isResizing = false;
+
+resizeHandle.addEventListener('mousedown', (e) => {
+  isResizing = true;
+  resizeHandle.classList.add('active');
+  document.body.style.cursor = 'col-resize';
+  document.body.style.userSelect = 'none';
+  document.addEventListener('mousemove', onResize);
+  document.addEventListener('mouseup', stopResize);
+  e.preventDefault();
+});
+
+function onResize(e) {
+  if (!isResizing) return;
+  const container = document.querySelector('.editor-panels');
+  const rect = container.getBoundingClientRect();
+  const ratio = (e.clientX - rect.left) / rect.width;
+  const clamped = Math.max(0.2, Math.min(0.8, ratio));
+  inputPanel.style.flex = `0 0 ${clamped * 100}%`;
+  previewPanel.style.flex = `0 0 ${(1 - clamped) * 100}%`;
+}
+
+function stopResize() {
+  isResizing = false;
+  resizeHandle.classList.remove('active');
+  document.body.style.cursor = '';
+  document.body.style.userSelect = '';
+  document.removeEventListener('mousemove', onResize);
+  document.removeEventListener('mouseup', stopResize);
+}
+
+// ==================== Theme ====================
+document.querySelectorAll('.theme-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (btn.dataset.theme === 'dark') {
+      document.body.classList.add('dark');
+    } else {
+      document.body.classList.remove('dark');
+    }
+  });
+});
+
+// ==================== Clear ====================
+document.getElementById('clearBtn').addEventListener('click', () => {
+  latexInput.value = '';
+  debouncedRender();
+  updateStatus();
+});
+
+// ==================== Copy ====================
+document.getElementById('copyBtn').addEventListener('click', (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  const tex = latexInput.value.trim();
+  if (!tex) {
+    showToast('请先输入公式', 'error');
+    return;
+  }
+  try {
+    navigator.clipboard.writeText(tex).then(() => {
+      showToast('LaTeX 代码已复制到剪贴板');
+    }).catch(() => {
+      fallbackCopy(tex);
+    });
+  } catch (err) {
+    fallbackCopy(tex);
+  }
+
+  function fallbackCopy(text) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('LaTeX 代码已复制到剪贴板');
+    } catch (err2) {
+      showToast('复制失败', 'error');
+    }
+  }
+});
+
+// ==================== Export ====================
+document.getElementById('exportBtn').addEventListener('click', () => {
+  if (!latexInput.value.trim()) {
+    showToast('请先输入公式', 'error');
+    return;
+  }
+  document.getElementById('exportModal').classList.add('show');
+});
+
+document.getElementById('modalClose').addEventListener('click', () => {
+  document.getElementById('exportModal').classList.remove('show');
+});
+
+document.getElementById('exportModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) {
+    e.currentTarget.classList.remove('show');
+  }
+});
+
+// Export SVG
+document.getElementById('exportSVG').addEventListener('click', () => {
+  const svgEl = preview.querySelector('svg');
+  if (!svgEl) { showToast('无法导出 SVG', 'error'); return; }
+  const svgData = new XMLSerializer().serializeToString(svgEl);
+  const blob = new Blob([svgData], { type: 'image/svg+xml' });
+  downloadBlob(blob, 'formula.svg');
+  showToast('SVG 已下载');
+  document.getElementById('exportModal').classList.remove('show');
+});
+
+// Export PNG
+document.getElementById('exportPNG').addEventListener('click', async () => {
+  try {
+    const canvas = await html2canvas(preview, {
+      backgroundColor: null,
+      scale: 3,
+      logging: false,
+    });
+    canvas.toBlob(blob => {
+      downloadBlob(blob, 'formula.png');
+      showToast('PNG 已下载');
+    });
+  } catch(e) {
+    showToast('PNG 导出失败', 'error');
+  }
+  document.getElementById('exportModal').classList.remove('show');
+});
+
+// Export LaTeX
+document.getElementById('exportLatex').addEventListener('click', () => {
+  const tex = latexInput.value.trim();
+  const blob = new Blob([tex], { type: 'text/plain' });
+  downloadBlob(blob, 'formula.tex');
+  showToast('LaTeX 文件已下载');
+  document.getElementById('exportModal').classList.remove('show');
+});
+
+// Export MathML
+document.getElementById('exportMathML').addEventListener('click', () => {
+  try {
+    const tex = latexInput.value.trim();
+    const html = katex.renderToString(tex, { displayMode: true, output: 'mathml', throwOnError: true });
+    const blob = new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${html}`], { type: 'application/mathml+xml' });
+    downloadBlob(blob, 'formula.mml');
+    showToast('MathML 已下载');
+  } catch(e) {
+    showToast('MathML 导出失败: ' + e.message, 'error');
+  }
+  document.getElementById('exportModal').classList.remove('show');
+});
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ==================== Toast ====================
+function showToast(message, type = 'success') {
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = message;
+  toastContainer.appendChild(toast);
+  setTimeout(() => toast.remove(), 2500);
+}
+
+// ==================== Structured Dialog (matrix / cases / braces) ====================
+function openStructuredDialog(type, env) {
+  const modal = document.getElementById('structuredModal');
+  const title = document.getElementById('structuredTitle');
+  const rowsInput = document.getElementById('structuredRows');
+  const colsInput = document.getElementById('structuredCols');
+  const colArea = document.getElementById('structuredRowColArea');
+  const colLabel = document.getElementById('structuredColLabel');
+
+  rowsInput.value = 2;
+  colsInput.value = 2;
+  modal.dataset.type = type;
+  modal.dataset.env = env;
+
+  if (type === 'matrix') {
+    title.textContent = '插入矩阵';
+    colArea.style.display = 'flex';
+    colLabel.style.display = '';
+    colsInput.style.display = '';
+  } else if (type === 'cases') {
+    title.textContent = '插入' + ({ cases: '分段函数', aligned: '对齐方程', array: '数组', gathered: '居中排列' }[env] || env);
+    colArea.style.display = 'flex';
+    colLabel.style.display = '';
+    colsInput.style.display = '';
+  } else if (type === 'right_cases') {
+    title.textContent = '分段函数（右大括号）';
+    colArea.style.display = 'flex';
+    colLabel.style.display = '';
+    colsInput.style.display = '';
+  } else if (type === 'left_brace' || type === 'right_brace') {
+    title.textContent = type === 'left_brace' ? '单左大括号' : '单右大括号';
+    colLabel.style.display = 'none';
+    colsInput.style.display = 'none';
+  }
+
+  modal.classList.add('show');
+  rowsInput.focus();
+  rowsInput.select();
+
+  // Clone confirm to remove old listeners
+  const oldConfirm = document.getElementById('structuredConfirm');
+  const newConfirm = oldConfirm.cloneNode(true);
+  oldConfirm.parentNode.replaceChild(newConfirm, oldConfirm);
+
+  newConfirm.addEventListener('click', () => {
+    const r = Math.max(1, Math.min(20, parseInt(rowsInput.value) || 2));
+    const c = Math.max(1, Math.min(20, parseInt(colsInput.value) || 2));
+    modal.classList.remove('show');
+    const t = modal.dataset.type;
+    const e = modal.dataset.env;
+    if (t === 'matrix') insertMatrix(e, r, c);
+    else if (t === 'cases') insertCases(e, r, c);
+    else if (t === 'right_cases') insertRightCases(r, c);
+    else if (t === 'left_brace') insertBrace('left', r);
+    else if (t === 'right_brace') insertBrace('right', r);
+  });
+
+  const onKey = (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); newConfirm.click(); }
+    if (e.key === 'Escape') { modal.classList.remove('show'); }
+  };
+  rowsInput.addEventListener('keydown', onKey);
+  colsInput.addEventListener('keydown', onKey);
+}
+
+function insertMatrix(env, rows, cols) {
+  const lines = [];
+  for (let r = 0; r < rows; r++) {
+    const cells = [];
+    for (let c = 0; c < cols; c++) cells.push('{}');
+    lines.push('  ' + cells.join(' & '));
+  }
+  insertAtCursor('\\begin{' + env + '}\n' + lines.join(' \\\\\n') + '\n\\end{' + env + '}');
+}
+
+function insertCases(env, rows, cols) {
+  const lines = [];
+  for (let r = 0; r < rows; r++) {
+    const cells = [];
+    for (let c = 0; c < cols; c++) cells.push('{}');
+    if (env === 'aligned') {
+      lines.push('  ' + cells.join(' &= '));
+    } else {
+      lines.push('  ' + cells.join(' & '));
+    }
+  }
+  const colSpec = env === 'array' ? '{' + 'l'.repeat(cols) + '}' : '';
+  insertAtCursor('\\begin{' + env + '}' + colSpec + '\n' + lines.join(' \\\\\n') + '\n\\end{' + env + '}');
+}
+
+function insertRightCases(rows, cols) {
+  const lines = [];
+  for (let r = 0; r < rows; r++) {
+    const cells = [];
+    for (let c = 0; c < cols; c++) cells.push('{}');
+    lines.push('  ' + cells.join(' & '));
+  }
+  const colSpec = '{' + 'l'.repeat(cols) + '}';
+  insertAtCursor('\\left.\\begin{array}' + colSpec + '\n' + lines.join(' \\\\\n') + '\n\\end{array}\\right\\}');
+}
+
+function insertBrace(side, rows) {
+  const lines = [];
+  for (let r = 0; r < rows; r++) {
+    lines.push('  {}');
+  }
+  const body = lines.join(' \\\\\n');
+  let tex;
+  if (side === 'left') {
+    tex = '\\left.\\begin{array}{l}\n' + body + '\n\\end{array}\\right\\}';
+  } else {
+    tex = '\\left\\{\\begin{array}{l}\n' + body + '\n\\end{array}\\right.';
+  }
+  insertAtCursor(tex);
+}
+
+document.getElementById('structuredClose').addEventListener('click', () => {
+  document.getElementById('structuredModal').classList.remove('show');
+});
+document.getElementById('structuredCancel').addEventListener('click', () => {
+  document.getElementById('structuredModal').classList.remove('show');
+});
+document.getElementById('structuredModal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('show');
+});
+
+// ==================== Keyboard Shortcuts ====================
+latexInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    if (placeholderPositions.length > 0 && placeholderIdx >= 0 && placeholderIdx < placeholderPositions.length) {
+      // Placeholder navigation mode — jump to next
+      jumpToNextPlaceholder();
+    } else {
+      // No active placeholders — reset and insert normal tab
+      placeholderPositions = [];
+      placeholderIdx = -1;
+      insertAtCursor('  ');
+    }
+    return;
+  }
+  if (e.ctrlKey && e.key === 'Enter') {
+    e.preventDefault();
+    document.getElementById('copyBtn').click();
+  }
+});
+
+// Reset placeholder state when user clicks manually
+latexInput.addEventListener('mousedown', () => {
+  placeholderPositions = [];
+  placeholderIdx = -1;
+});
+
+// ==================== Init ====================
+
+// Track recent UI interactions and block automated copy events
+// that happen immediately after clicking UI elements (commonly by some extensions).
+window.__latexAppLastUIInteraction = 0;
+window.__latexAppLastUIElementDesc = '';
+window.__latexAppCopyLogEnabled = true; // toggle detailed logging
+window.__latexAppCopyThreshold = 500;
+
+document.addEventListener('mousedown', function(e) {
+  try {
+    var el = e.target;
+    if (el && (el.closest('.toolbar') || el.closest('.sidebar') || el.closest('#preview') || el.closest('.template-item') || el.closest('.symbol-btn') || el.closest('.toolbar-dropdown-item') || el.closest('.symbol-grid'))) {
+      window.__latexAppLastUIInteraction = Date.now();
+      try {
+        var id = el.id ? ('#' + el.id) : '';
+        var cls = el.className ? ('.' + String(el.className).trim().replace(/\s+/g, '.')) : '';
+        window.__latexAppLastUIElementDesc = el.tagName + id + cls;
+      } catch (err) {
+        window.__latexAppLastUIElementDesc = el.tagName || '';
+      }
+    }
+  } catch (err) { }
+}, true);
+
+document.addEventListener('copy', function(e) {
+  try {
+    var last = window.__latexAppLastUIInteraction || 0;
+    var elapsed = Date.now() - last;
+    var selection = '';
+    try { selection = (window.getSelection && window.getSelection().toString()) || ''; } catch (_) { selection = ''; }
+    var active = document.activeElement;
+    var activeDesc = '';
+    try { activeDesc = active ? (active.tagName + (active.id ? '#' + active.id : '') + (active.className ? '.' + String(active.className).trim().replace(/\s+/g, '.') : '')) : 'none'; } catch (_) { activeDesc = 'unknown'; }
+    var target = e.target;
+    var targetDesc = '';
+    try { targetDesc = target ? (target.tagName + (target.id ? '#' + target.id : '') + (target.className ? '.' + String(target.className).trim().replace(/\s+/g, '.') : '')) : 'none'; } catch (_) { targetDesc = 'unknown'; }
+    var clipboardText = '';
+    try { if (e.clipboardData && e.clipboardData.getData) clipboardText = e.clipboardData.getData('text/plain') || ''; } catch (_) { clipboardText = '[unavailable]'; }
+    var stack = (new Error()).stack || '';
+    var fromExt = /chrome-extension:\/\//i.test(stack) || /moz-extension:\/\//i.test(stack) || /content\.js/i.test(stack) || /copyToClipboard/i.test(stack) || /copytex/i.test(stack);
+
+    if (window.__latexAppCopyLogEnabled) {
+      console.groupCollapsed('[LaTeX CopyEvent] ' + new Date().toISOString());
+      console.log('isTrusted:', e.isTrusted);
+      console.log('elapsedSinceUIClick(ms):', elapsed);
+      console.log('lastUIElement:', window.__latexAppLastUIElementDesc || null);
+      console.log('target:', targetDesc);
+      console.log('activeElement:', activeDesc);
+      console.log('selection:', selection);
+      console.log('clipboardDataText (if any):', clipboardText);
+      console.log('fromExtensionStack:', fromExt);
+      console.log('event:', e);
+      console.log('stack:', stack);
+      console.groupEnd();
+    }
+
+    window.__latexAppLastCopyEvent = {
+      time: Date.now(),
+      isTrusted: !!e.isTrusted,
+      elapsedSinceUI: elapsed,
+      lastUIElement: window.__latexAppLastUIElementDesc,
+      target: targetDesc,
+      activeElement: activeDesc,
+      selection: selection,
+      clipboardText: clipboardText,
+      stack: stack,
+      fromExtensionStack: fromExt
+    };
+    // Block if the event appears to be triggered by an extension stack or it happened too soon after a UI click
+    if (fromExt || elapsed < (window.__latexAppCopyThreshold || 500)) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      console.info('Blocked automated copy (fromExt:' + fromExt + ', elapsed:' + elapsed + 'ms)');
+      window.__latexAppLastCopyEvent.blockedReason = fromExt ? 'extension_stack' : 'rapid_ui_click';
+    }
+  } catch (err) {
+    console.error('Error in copy event logger', err);
+  }
+}, true);
+
+// Guard: override clipboard APIs and remove extension-injected copy UI
+(function() {
+  try {
+    var threshold = window.__latexAppCopyThreshold || 500;
+    if (navigator && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      var origWrite = navigator.clipboard.writeText.bind(navigator.clipboard);
+      navigator.clipboard.writeText = function(text) {
+        var elapsed = Date.now() - (window.__latexAppLastUIInteraction || 0);
+        var stack = (new Error()).stack || '';
+        var fromExt = /chrome-extension:\/\//i.test(stack) || /moz-extension:\/\//i.test(stack) || /content\.js/i.test(stack) || /copyToClipboard/i.test(stack) || /copytex/i.test(stack);
+        if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] navigator.clipboard.writeText called:', text, 'elapsed', elapsed, 'fromExt:', fromExt);
+        if (fromExt || elapsed < threshold) {
+          if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] blocked navigator.clipboard.writeText (fromExt || elapsed < ' + threshold + 'ms)');
+          return Promise.resolve();
+        }
+        return origWrite(text);
+      };
+    }
+  } catch (err) { }
+
+  try {
+    var origExec = document.execCommand;
+    document.execCommand = function(cmd) {
+      try {
+        if (String(cmd).toLowerCase() === 'copy') {
+          var elapsed = Date.now() - (window.__latexAppLastUIInteraction || 0);
+          var stack = (new Error()).stack || '';
+          var fromExt = /chrome-extension:\/\//i.test(stack) || /moz-extension:\/\//i.test(stack) || /content\.js/i.test(stack) || /copyToClipboard/i.test(stack) || /copytex/i.test(stack);
+          if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] document.execCommand(copy) called, elapsed', elapsed, 'fromExt:', fromExt);
+          if (fromExt || elapsed < threshold) {
+            if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] blocked execCommand(copy) (fromExt || elapsed < ' + threshold + 'ms)');
+            return false;
+          }
+        }
+      } catch (e) { }
+      return origExec.apply(document, arguments);
+    };
+  } catch (err) { }
+
+  try {
+    var mo = new MutationObserver(function(mutations) {
+      mutations.forEach(function(m) {
+        (m.addedNodes || []).forEach(function(node) {
+          try {
+            if (node && node.nodeType === 1) {
+              var cls = node.className || '';
+              if (/copytex/i.test(cls) || node.classList.contains('copytex-toast') || node.classList.contains('copytex-tooltip')) {
+                node.parentNode && node.parentNode.removeChild(node);
+                if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] removed injected node', node);
+                return;
+              }
+              var found = node.querySelectorAll && node.querySelectorAll('.copytex-toast, .copytex-tooltip');
+              if (found && found.length) {
+                for (var i = 0; i < found.length; i++) {
+                  var el = found[i];
+                  el.parentNode && el.parentNode.removeChild(el);
+                  if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] removed injected node', el);
+                }
+              }
+            }
+          } catch (e) { }
+        });
+      });
+    });
+    mo.observe(document.documentElement || document.body, { childList: true, subtree: true });
+    var initial = (document.querySelectorAll && document.querySelectorAll('.copytex-toast, .copytex-tooltip')) || [];
+    for (var j = 0; j < initial.length; j++) { var it = initial[j]; it.parentNode && it.parentNode.removeChild(it); if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] removed initial injected node', it); }
+  } catch (err) { }
+})();
+
+// Aggressive capture handler: block extension reaction on preview/symbol/template/history clicks
+(function(){
+  try {
+    var enabled = true; // set to false to disable aggressive blocking
+    if (!enabled) return;
+    document.addEventListener('click', function(e){
+      try {
+        var el = e.target;
+        var sym = el.closest && el.closest('.symbol-btn');
+        if (sym) {
+          // block other listeners (extensions) and perform symbol insertion ourselves
+          e.stopImmediatePropagation(); e.preventDefault();
+          var cmd = sym.dataset && sym.dataset.cmd ? sym.dataset.cmd : sym.title;
+          try { if (cmd) insertAtCursor(cmd); } catch (err) { console.error('insertAtCursor error', err); }
+          return;
+        }
+        var tpl = el.closest && el.closest('.template-item');
+        if (tpl) {
+          e.stopImmediatePropagation(); e.preventDefault();
+          try { var f = tpl.dataset && tpl.dataset.formula ? tpl.dataset.formula : null; if (f) { latexInput.value = f; debouncedRender(); updateStatus(); addToHistory(f); } } catch (err) { console.error('template click proxy error', err); }
+          return;
+        }
+        var his = el.closest && el.closest('.history-item');
+        if (his) {
+          e.stopImmediatePropagation(); e.preventDefault();
+          try { var hf = his.dataset && his.dataset.formula ? his.dataset.formula : null; if (hf) { latexInput.value = hf; debouncedRender(); updateStatus(); } } catch (err) { console.error('history click proxy error', err); }
+          return;
+        }
+        if (el.closest && el.closest('#preview')) {
+          // block preview clicks from reaching extensions (no page-side action required)
+          e.stopImmediatePropagation(); e.preventDefault();
+          if (window.__latexAppCopyLogEnabled) console.warn('[LaTeX Guard] blocked click inside preview to prevent extension copy');
+          return;
+        }
+      } catch (err) { }
+    }, true);
+  } catch (err) { }
+})();
+
+buildToolbar();
+buildSymbols();
+buildTemplates();
+renderHistory();
+
+// Set default example
+latexInput.value = 'E = mc^2';
+renderPreview();
+updateStatus();
+</script>
+</body>
+</html>
