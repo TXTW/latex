@@ -2,7 +2,7 @@
 
 在线 LaTeX 公式编辑器，支持实时预览、符号面板、工具栏下拉菜单、导出功能。
 
-**在线访问**：https://txtw.github.io/latex_edit/
+**在线访问**：https://txtw.github.io/latex
 
 ## 功能
 
